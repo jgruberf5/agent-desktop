@@ -132,10 +132,18 @@ configure_distro() {
     esac
 
     # Set defaults based on distro if not overridden
-    [[ -z "${HOSTNAME}" ]] && HOSTNAME="${distro}-desktop"
-    [[ -z "${FULLNAME}" ]] && FULLNAME="${DISTRO_NAME} User"
-    [[ -z "${VM_NAME}" ]] && VM_NAME="${distro}-desktop-vm"
-    [[ -z "${DESKTOP}" ]] && DESKTOP="${DISTRO_DEFAULT_DESKTOP}"
+    if [[ -z "${HOSTNAME}" ]]; then
+        HOSTNAME="${distro}-desktop"
+    fi
+    if [[ -z "${FULLNAME}" ]]; then
+        FULLNAME="${DISTRO_NAME} User"
+    fi
+    if [[ -z "${VM_NAME}" ]]; then
+        VM_NAME="${distro}-desktop-vm"
+    fi
+    if [[ -z "${DESKTOP}" ]]; then
+        DESKTOP="${DISTRO_DEFAULT_DESKTOP}"
+    fi
 }
 
 # Parse command line arguments
