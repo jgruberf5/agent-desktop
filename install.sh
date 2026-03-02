@@ -495,6 +495,20 @@ cloud-init setup and install all packages.${NC}
 EOF
 }
 
+prompt_console_connect() {
+    echo ""
+    read -r -p "Would you like to connect to the VM console now? [y/N] " response
+    case "${response}" in
+        [yY][eE][sS]|[yY])
+            log_info "Connecting to console (press Ctrl+] to exit)..."
+            virsh console "${VM_NAME}"
+            ;;
+        *)
+            log_info "You can connect later with: virsh console ${VM_NAME}"
+            ;;
+    esac
+}
+
 # Main execution
 main() {
     log_info "Starting Ubuntu Cloud Image Desktop VM Installer v${VERSION}"
@@ -523,6 +537,7 @@ main() {
     create_cloud_init_config
     create_vm
     print_summary
+    prompt_console_connect
 }
 
 main
