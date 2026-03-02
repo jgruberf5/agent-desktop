@@ -300,11 +300,11 @@ remove_vm() {
 }
 
 # Set up working directory
-WORK_DIR="/var/lib/libvirt/images/${VM_NAME}"
-VM_DISK="${WORK_DIR}/${VM_NAME}.qcow2"
-CLOUD_INIT_ISO="${WORK_DIR}/cloud-init.iso"
-
 setup_working_directory() {
+    WORK_DIR="/var/lib/libvirt/images/${VM_NAME}"
+    VM_DISK="${WORK_DIR}/${VM_NAME}.qcow2"
+    CLOUD_INIT_ISO="${WORK_DIR}/cloud-init.iso"
+
     log_info "Setting up working directory: ${WORK_DIR}"
     mkdir -p "${WORK_DIR}"
 }
