@@ -1,0 +1,152 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update version in script
+        run: |
+          sed -i "s/^VERSION=\".*\"/VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" install.sh
+
+      - name: Make script executable
+        run: chmod +x install.sh
+
+      - name: Validate script syntax
+        run: bash -n install.sh
+
+      - name: Create checksums
+        run: |
+          sha256sum install.sh > checksums.txt
+          md5sum install.sh >> checksums.txt
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat << 'EOF' > release_notes.md
+          ## Ubuntu Cloud Image Desktop VM Installer v${{ steps.get_version.outputs.VERSION }}
+
+          ### Quick Install
+
+          Run directly from GitHub:
+
+          ```bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/install.sh | sudo bash -s -- \
+            --hostname mydesktop \
+            --username myuser \
+            --fullname "John Doe" \
+            --password mypassword \
+            --vcpus 4 \
+            --ram 8192 \
+            --disk 50 \
+            --name my-ubuntu-vm
+          ```
+
+          Or download and run:
+
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/install.sh
+          chmod +x install.sh
+          sudo ./install.sh --help
+          ```
+
+          ### Features
+
+          - Creates Ubuntu Desktop VM on KVM/libvirt
+          - Cloud-init based configuration
+          - Automatic installation of:
+            - Google Chrome
+            - Docker
+            - Tailscale
+            - Node.js (latest LTS)
+            - VS Code
+            - OpenClaw
+          - XRDP for remote desktop access
+          - SPICE graphics for local access
+
+          ### Requirements
+
+          - Linux host with KVM support
+          - libvirt and virt-install
+          - Root/sudo privileges
+          - AMD64 architecture
+
+          ### Options
+
+          | Option | Description | Default |
+          |--------|-------------|---------|
+          | `-h, --hostname` | VM hostname | ubuntu-desktop |
+          | `-u, --username` | Username | user |
+          | `-f, --fullname` | Full name of user | Ubuntu User |
+          | `-p, --password` | User password | (required) |
+          | `-c, --vcpus` | Number of vCPUs | 4 |
+          | `-r, --ram` | RAM in MB | 8192 |
+          | `-d, --disk` | Disk size in GB | 50 |
+          | `-n, --name` | VM name | ubuntu-desktop-vm |
+          | `-e, --desktop` | Desktop package | ubuntu-desktop |
+
+          ### Desktop Environments
+
+          You can use different desktop environments:
+
+          - `ubuntu-desktop` - GNOME (default)
+          - `kubuntu-desktop` - KDE Plasma
+          - `xubuntu-desktop` - XFCE
+          - `lubuntu-desktop` - LXQt
+          - `ubuntu-mate-desktop` - MATE
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.get_version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          files: |
+            install.sh
+            checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Test Script
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate bash syntax
+        run: bash -n install.sh
+
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+
+      - name: Test help output
+        run: |
+          chmod +x install.sh
+          # Test that help works (script exits 0 on --help)
+          ./install.sh --help
+
+      - name: Test version output
+        run: ./install.sh --version
