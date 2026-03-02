@@ -81,6 +81,8 @@ Options:
     -n, --name          Virtual machine name (default: ubuntu-desktop-vm)
     -e, --desktop       Desktop environment package (default: ubuntu-desktop)
     -b, --bridge        Host bridge for VM network (e.g., br0)
+    -D, --hostdev       Host device passthrough (repeatable)
+    -s, --silent        Silent install (no output, no prompts)
     --remove            Remove the VM and all associated storage
     --help              Show this help message
     --version           Show version
@@ -133,6 +135,41 @@ Completely remove a VM and all associated storage:
 
 ```bash
 sudo ./install.sh --remove --name my-vm
+```
+
+### GPU/Device Passthrough
+
+Pass through PCI or USB devices to the VM using the repeatable `--hostdev` option:
+
+```bash
+# Find available devices
+virsh nodedev-list
+
+# Pass through a GPU (and its audio device)
+sudo ./install.sh \
+  --hostname gpu-vm \
+  --username myuser \
+  --password mypassword \
+  --hostdev pci_0000_01_00_0 \
+  --hostdev pci_0000_01_00_1
+
+# Pass through a USB device
+sudo ./install.sh \
+  --password mypassword \
+  --hostdev usb_1d6b_0002
+```
+
+### Silent Installation
+
+Run without output or prompts (useful for automation):
+
+```bash
+sudo ./install.sh \
+  --silent \
+  --hostname auto-vm \
+  --username myuser \
+  --password mypassword \
+  --name automated-vm
 ```
 
 ## Desktop Environments
