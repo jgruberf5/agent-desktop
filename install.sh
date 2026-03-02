@@ -16,7 +16,7 @@ DEFAULT_VCPUS="4"
 DEFAULT_RAM="8192"
 DEFAULT_DISK="50"
 DEFAULT_VM_NAME="ubuntu-desktop-vm"
-DEFAULT_DESKTOP="ubuntu-desktop"
+DEFAULT_DESKTOP="ubuntu-desktop-minimal"
 DEFAULT_BRIDGE=""
 
 # Color output

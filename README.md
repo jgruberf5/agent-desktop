@@ -79,7 +79,7 @@ Options:
     -r, --ram           RAM size in MB (default: 8192)
     -d, --disk          Disk size in GB (default: 50)
     -n, --name          Virtual machine name (default: ubuntu-desktop-vm)
-    -e, --desktop       Desktop environment package (default: ubuntu-desktop)
+    -e, --desktop       Desktop environment package (default: ubuntu-desktop-minimal)
     -b, --bridge        Host bridge for VM network (e.g., br0)
     -D, --hostdev       Host device passthrough (repeatable)
     -s, --silent        Silent install (no output, no prompts)
