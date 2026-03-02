@@ -57,6 +57,8 @@ Options:
     -e, --desktop       Desktop environment package (default: ${DEFAULT_DESKTOP})
     -b, --bridge        Host bridge for VM network (e.g., br0). If not specified,
                         uses the default libvirt NAT network.
+    -D, --hostdev       Host device passthrough (repeatable). Use nodedev-list to
+                        find device names. Examples: pci_0000_01_00_0, usb_1d6b_0002
     -s, --silent        Silent install (no output, no prompts)
     --remove            Remove the VM and all associated storage
     --help              Show this help message
@@ -65,6 +67,7 @@ Options:
 Examples:
     $0 -h mydesktop -u myuser -f "John Doe" -p mypassword -c 4 -r 8192 -d 100 -n my-vm
     $0 -n my-vm -p mypassword --bridge br0
+    $0 -n my-vm -p mypassword -D pci_0000_01_00_0 -D pci_0000_01_00_1
     $0 --remove -n my-vm
 
 The script will install the following software automatically:
@@ -97,6 +100,7 @@ DESKTOP="${DEFAULT_DESKTOP}"
 BRIDGE="${DEFAULT_BRIDGE}"
 SILENT=false
 REMOVE_VM=false
+HOSTDEVS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -138,6 +142,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -b|--bridge)
             BRIDGE="$2"
+            shift 2
+            ;;
+        -D|--hostdev)
+            HOSTDEVS+=("$2")
             shift 2
             ;;
         -s|--silent)
@@ -431,6 +439,13 @@ create_vm() {
         log_info "Using default NAT network"
     fi
 
+    # Build hostdev options
+    local hostdev_opts=()
+    for dev in "${HOSTDEVS[@]}"; do
+        hostdev_opts+=("--hostdev" "${dev}")
+        log_info "Adding host device passthrough: ${dev}"
+    done
+
     virt-install \
         --name "${VM_NAME}" \
         --ram "${RAM}" \
@@ -444,6 +459,7 @@ create_vm() {
         --channel spicevmc \
         --console pty,target_type=serial \
         --noautoconsole \
+        ${hostdev_opts[@]+"${hostdev_opts[@]}"} \
         --import
 
     log_info "VM '${VM_NAME}' created and starting..."
