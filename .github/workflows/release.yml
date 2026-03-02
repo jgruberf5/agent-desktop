@@ -40,22 +40,21 @@ jobs:
         id: release_notes
         run: |
           cat << 'EOF' > release_notes.md
-          ## Ubuntu Cloud Image Desktop VM Installer v${{ steps.get_version.outputs.VERSION }}
+          ## Cloud Image Desktop VM Installer v${{ steps.get_version.outputs.VERSION }}
 
           ### Quick Install
 
-          Run directly from GitHub:
-
+          **Ubuntu (default):**
           ```bash
           curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/install.sh | sudo bash -s -- \
-            --hostname mydesktop \
-            --username myuser \
-            --fullname "John Doe" \
-            --password mypassword \
-            --vcpus 4 \
-            --ram 8192 \
-            --disk 50 \
-            --name my-ubuntu-vm
+            --password mypassword
+          ```
+
+          **Fedora:**
+          ```bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/install.sh | sudo bash -s -- \
+            --distro fedora \
+            --password mypassword
           ```
 
           Or download and run:
@@ -66,9 +65,16 @@ jobs:
           sudo ./install.sh --help
           ```
 
+          ### Supported Distributions
+
+          | Distribution | Version | Default Desktop |
+          |--------------|---------|-----------------|
+          | Ubuntu | 24.04 LTS | `ubuntu-desktop-minimal` (GNOME) |
+          | Fedora | 41 | `@workstation-product-environment` (GNOME) |
+
           ### Features
 
-          - Creates Ubuntu Desktop VM on KVM/libvirt
+          - Multi-distro support (Ubuntu and Fedora)
           - Cloud-init based configuration
           - Automatic installation of:
             - Google Chrome
@@ -79,6 +85,8 @@ jobs:
             - OpenClaw
           - XRDP for remote desktop access
           - SPICE graphics for local access
+          - Host device passthrough support
+          - Silent mode for automation
 
           ### Requirements
 
@@ -91,25 +99,21 @@ jobs:
 
           | Option | Description | Default |
           |--------|-------------|---------|
-          | `-h, --hostname` | VM hostname | ubuntu-desktop |
+          | `-o, --distro` | Distribution (ubuntu, fedora) | ubuntu |
+          | `-h, --hostname` | VM hostname | \<distro\>-desktop |
           | `-u, --username` | Username | user |
-          | `-f, --fullname` | Full name of user | Ubuntu User |
+          | `-f, --fullname` | Full name of user | \<Distro\> User |
           | `-p, --password` | User password | (required) |
           | `-c, --vcpus` | Number of vCPUs | 4 |
           | `-r, --ram` | RAM in MB | 8192 |
           | `-d, --disk` | Disk size in GB | 50 |
-          | `-n, --name` | VM name | ubuntu-desktop-vm |
-          | `-e, --desktop` | Desktop package | ubuntu-desktop |
+          | `-n, --name` | VM name | \<distro\>-desktop-vm |
+          | `-e, --desktop` | Desktop package | distro-specific |
+          | `-b, --bridge` | Host bridge for networking | default NAT |
+          | `-D, --hostdev` | Device passthrough (repeatable) | none |
+          | `-s, --silent` | Silent install | false |
+          | `--remove` | Remove VM and storage | - |
 
-          ### Desktop Environments
-
-          You can use different desktop environments:
-
-          - `ubuntu-desktop` - GNOME (default)
-          - `kubuntu-desktop` - KDE Plasma
-          - `xubuntu-desktop` - XFCE
-          - `lubuntu-desktop` - LXQt
-          - `ubuntu-mate-desktop` - MATE
           EOF
 
       - name: Create Release

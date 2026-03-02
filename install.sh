@@ -1,22 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
-# Ubuntu Cloud Image Desktop VM Installer for KVM
+# Cloud Image Desktop VM Installer for KVM
+# Supports Ubuntu and Fedora
 # Usage: ./install.sh [OPTIONS]
 
-VERSION="1.0.0"
-UBUNTU_VERSION="24.04"
-UBUNTU_CODENAME="noble"
+VERSION="1.1.0"
 
 # Default values
-DEFAULT_HOSTNAME="ubuntu-desktop"
+DEFAULT_DISTRO="ubuntu"
+DEFAULT_HOSTNAME=""
 DEFAULT_USERNAME="user"
-DEFAULT_FULLNAME="Ubuntu User"
+DEFAULT_FULLNAME=""
 DEFAULT_VCPUS="4"
 DEFAULT_RAM="8192"
 DEFAULT_DISK="50"
-DEFAULT_VM_NAME="ubuntu-desktop-vm"
-DEFAULT_DESKTOP="ubuntu-desktop-minimal"
+DEFAULT_VM_NAME=""
+DEFAULT_DESKTOP=""
 DEFAULT_BRIDGE=""
 
 # Color output
@@ -41,20 +41,21 @@ log_error() {
 
 usage() {
     cat << EOF
-Ubuntu Cloud Image Desktop VM Installer for KVM v${VERSION}
+Cloud Image Desktop VM Installer for KVM v${VERSION}
 
 Usage: $0 [OPTIONS]
 
 Options:
-    -h, --hostname      VM hostname (default: ${DEFAULT_HOSTNAME})
-    -u, --username      Username for the VM (default: ${DEFAULT_USERNAME})
-    -f, --fullname      Full name of the user (default: ${DEFAULT_FULLNAME})
+    -o, --distro        Linux distribution: ubuntu, fedora (default: ubuntu)
+    -h, --hostname      VM hostname (default: <distro>-desktop)
+    -u, --username      Username for the VM (default: user)
+    -f, --fullname      Full name of the user (default: <Distro> User)
     -p, --password      User password (required for install)
     -c, --vcpus         Number of vCPUs (default: ${DEFAULT_VCPUS})
     -r, --ram           RAM size in MB (default: ${DEFAULT_RAM})
     -d, --disk          Disk size in GB (default: ${DEFAULT_DISK})
-    -n, --name          Virtual machine name (default: ${DEFAULT_VM_NAME})
-    -e, --desktop       Desktop environment package (default: ${DEFAULT_DESKTOP})
+    -n, --name          Virtual machine name (default: <distro>-desktop-vm)
+    -e, --desktop       Desktop environment package (default: distro-specific)
     -b, --bridge        Host bridge for VM network (e.g., br0). If not specified,
                         uses the default libvirt NAT network.
     -D, --hostdev       Host device passthrough (repeatable). Use nodedev-list to
@@ -64,10 +65,19 @@ Options:
     --help              Show this help message
     --version           Show version
 
+Supported Distributions:
+    ubuntu              Ubuntu 24.04 LTS (Noble Numbat)
+    fedora              Fedora 41
+
+Default Desktop Environments:
+    ubuntu              ubuntu-desktop-minimal (GNOME)
+    fedora              @workstation-product-environment (GNOME)
+
 Examples:
-    $0 -h mydesktop -u myuser -f "John Doe" -p mypassword -c 4 -r 8192 -d 100 -n my-vm
+    $0 -o ubuntu -p mypassword
+    $0 -o fedora -p mypassword -n fedora-workstation
+    $0 -o ubuntu -h mydesktop -u myuser -f "John Doe" -p mypassword
     $0 -n my-vm -p mypassword --bridge br0
-    $0 -n my-vm -p mypassword -D pci_0000_01_00_0 -D pci_0000_01_00_1
     $0 --remove -n my-vm
 
 The script will install the following software automatically:
@@ -83,11 +93,53 @@ EOF
 }
 
 show_version() {
-    echo "Ubuntu Cloud Image Desktop VM Installer v${VERSION}"
+    echo "Cloud Image Desktop VM Installer v${VERSION}"
     exit 0
 }
 
+# Configure distro-specific settings
+configure_distro() {
+    local distro="$1"
+
+    case "${distro}" in
+        ubuntu)
+            DISTRO_NAME="Ubuntu"
+            DISTRO_VERSION="24.04"
+            DISTRO_CODENAME="noble"
+            DISTRO_OS_VARIANT="ubuntu24.04"
+            DISTRO_IMAGE_URL="https://cloud-images.ubuntu.com/${DISTRO_CODENAME}/current/${DISTRO_CODENAME}-server-cloudimg-amd64.img"
+            DISTRO_IMAGE_NAME="${DISTRO_CODENAME}-server-cloudimg-amd64.img"
+            DISTRO_DEFAULT_DESKTOP="ubuntu-desktop-minimal"
+            DISTRO_USER_GROUPS="users, admin, docker, sudo"
+            DISTRO_PKG_MANAGER="apt"
+            ;;
+        fedora)
+            DISTRO_NAME="Fedora"
+            DISTRO_VERSION="41"
+            DISTRO_CODENAME="f41"
+            DISTRO_OS_VARIANT="fedora40"  # Use fedora40 as fallback if fedora41 not available
+            DISTRO_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
+            DISTRO_IMAGE_NAME="Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
+            DISTRO_DEFAULT_DESKTOP="@workstation-product-environment"
+            DISTRO_USER_GROUPS="users, wheel, docker"
+            DISTRO_PKG_MANAGER="dnf"
+            ;;
+        *)
+            log_error "Unsupported distribution: ${distro}"
+            log_error "Supported distributions: ubuntu, fedora"
+            exit 1
+            ;;
+    esac
+
+    # Set defaults based on distro if not overridden
+    [[ -z "${HOSTNAME}" ]] && HOSTNAME="${distro}-desktop"
+    [[ -z "${FULLNAME}" ]] && FULLNAME="${DISTRO_NAME} User"
+    [[ -z "${VM_NAME}" ]] && VM_NAME="${distro}-desktop-vm"
+    [[ -z "${DESKTOP}" ]] && DESKTOP="${DISTRO_DEFAULT_DESKTOP}"
+}
+
 # Parse command line arguments
+DISTRO="${DEFAULT_DISTRO}"
 HOSTNAME="${DEFAULT_HOSTNAME}"
 USERNAME="${DEFAULT_USERNAME}"
 FULLNAME="${DEFAULT_FULLNAME}"
@@ -104,6 +156,10 @@ HOSTDEVS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -o|--distro)
+            DISTRO="$2"
+            shift 2
+            ;;
         -h|--hostname)
             HOSTNAME="$2"
             shift 2
@@ -168,6 +224,9 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Configure distro settings (sets defaults for unset values)
+configure_distro "${DISTRO}"
 
 # Validate required arguments
 if [[ "${REMOVE_VM}" == false ]] && [[ -z "${PASSWORD}" ]]; then
@@ -242,8 +301,6 @@ remove_vm() {
 
 # Set up working directory
 WORK_DIR="/var/lib/libvirt/images/${VM_NAME}"
-CLOUD_IMAGE_URL="https://cloud-images.ubuntu.com/${UBUNTU_CODENAME}/current/${UBUNTU_CODENAME}-server-cloudimg-amd64.img"
-CLOUD_IMAGE="${WORK_DIR}/${UBUNTU_CODENAME}-server-cloudimg-amd64.img"
 VM_DISK="${WORK_DIR}/${VM_NAME}.qcow2"
 CLOUD_INIT_ISO="${WORK_DIR}/cloud-init.iso"
 
@@ -253,14 +310,16 @@ setup_working_directory() {
 }
 
 download_cloud_image() {
+    CLOUD_IMAGE="${WORK_DIR}/${DISTRO_IMAGE_NAME}"
+
     if [[ -f "${CLOUD_IMAGE}" ]]; then
         log_info "Cloud image already exists, skipping download"
     else
-        log_info "Downloading Ubuntu ${UBUNTU_VERSION} cloud image..."
+        log_info "Downloading ${DISTRO_NAME} ${DISTRO_VERSION} cloud image..."
         if [[ "${SILENT}" == true ]]; then
-            wget -q -O "${CLOUD_IMAGE}" "${CLOUD_IMAGE_URL}"
+            wget -q -O "${CLOUD_IMAGE}" "${DISTRO_IMAGE_URL}"
         else
-            wget -q --show-progress -O "${CLOUD_IMAGE}" "${CLOUD_IMAGE_URL}"
+            wget -q --show-progress -O "${CLOUD_IMAGE}" "${DISTRO_IMAGE_URL}"
         fi
     fi
 }
@@ -280,13 +339,9 @@ generate_password_hash() {
     echo "${PASSWORD}" | openssl passwd -6 -stdin
 }
 
-create_cloud_init_config() {
-    log_info "Creating cloud-init configuration..."
+create_cloud_init_config_ubuntu() {
+    local PASSWORD_HASH="$1"
 
-    local PASSWORD_HASH
-    PASSWORD_HASH=$(generate_password_hash)
-
-    # Create user-data
     cat > "${WORK_DIR}/user-data" << EOF
 #cloud-config
 hostname: ${HOSTNAME}
@@ -295,7 +350,7 @@ users:
   - name: ${USERNAME}
     gecos: ${FULLNAME}
     sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: users, admin, docker, sudo
+    groups: ${DISTRO_USER_GROUPS}
     home: /home/${USERNAME}
     shell: /bin/bash
     lock_passwd: false
@@ -336,7 +391,7 @@ write_files:
       echo "=== Installing Google Chrome ==="
       wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
       apt-get install -y /tmp/google-chrome.deb || apt-get install -f -y
-      rm /tmp/google-chrome.deb
+      rm -f /tmp/google-chrome.deb
 
       echo "=== Installing Docker ==="
       curl -fsSL https://get.docker.com | sh
@@ -357,7 +412,7 @@ write_files:
       echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list
       apt-get update
       apt-get install -y code
-      rm /tmp/packages.microsoft.gpg
+      rm -f /tmp/packages.microsoft.gpg
 
       echo "=== Installing OpenClaw ==="
       npm install -g openclaw || npm install -g @anthropic-ai/claude-code || echo "OpenClaw/Claude Code installation attempted"
@@ -371,6 +426,7 @@ write_files:
       chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.xsession
 
       # Allow colord for all users (fixes XRDP color profile issues)
+      mkdir -p /etc/polkit-1/localauthority/50-local.d
       cat > /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla << 'POLKIT'
       [Allow Colord all Users]
       Identity=unix-user:*
@@ -387,8 +443,139 @@ runcmd:
   - /opt/setup-desktop.sh
   - reboot
 
-final_message: "Ubuntu Desktop VM is ready! Connect via RDP or console."
+final_message: "${DISTRO_NAME} Desktop VM is ready! Connect via RDP or console."
 EOF
+}
+
+create_cloud_init_config_fedora() {
+    local PASSWORD_HASH="$1"
+
+    cat > "${WORK_DIR}/user-data" << EOF
+#cloud-config
+hostname: ${HOSTNAME}
+manage_etc_hosts: true
+users:
+  - name: ${USERNAME}
+    gecos: ${FULLNAME}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: ${DISTRO_USER_GROUPS}
+    home: /home/${USERNAME}
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: ${PASSWORD_HASH}
+    ssh_pwauth: true
+
+chpasswd:
+  expire: false
+
+ssh_pwauth: true
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - xrdp
+  - gnome-tweaks
+  - curl
+  - wget
+  - git
+  - gcc
+  - gcc-c++
+  - make
+  - ca-certificates
+  - gnupg2
+
+write_files:
+  - path: /opt/setup-desktop.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+
+      echo "=== Installing Desktop Environment ==="
+      dnf groupinstall -y "${DESKTOP}"
+
+      echo "=== Installing Google Chrome ==="
+      dnf install -y fedora-workstation-repositories || true
+      dnf config-manager --set-enabled google-chrome || true
+      dnf install -y google-chrome-stable || {
+        cat > /etc/yum.repos.d/google-chrome.repo << 'REPO'
+      [google-chrome]
+      name=google-chrome
+      baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+      REPO
+        dnf install -y google-chrome-stable
+      }
+
+      echo "=== Installing Docker ==="
+      dnf -y install dnf-plugins-core
+      dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+      dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      systemctl enable docker
+      systemctl start docker
+      usermod -aG docker ${USERNAME}
+
+      echo "=== Installing Tailscale ==="
+      curl -fsSL https://tailscale.com/install.sh | sh
+
+      echo "=== Installing Node.js LTS ==="
+      dnf install -y nodejs npm
+
+      echo "=== Installing VS Code ==="
+      rpm --import https://packages.microsoft.com/keys/microsoft.asc
+      cat > /etc/yum.repos.d/vscode.repo << 'REPO'
+      [code]
+      name=Visual Studio Code
+      baseurl=https://packages.microsoft.com/yumrepos/vscode
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+      REPO
+      dnf install -y code
+
+      echo "=== Installing OpenClaw ==="
+      npm install -g openclaw || npm install -g @anthropic-ai/claude-code || echo "OpenClaw/Claude Code installation attempted"
+
+      echo "=== Configuring XRDP ==="
+      systemctl enable xrdp
+      systemctl start xrdp
+
+      # Configure XRDP to use GNOME
+      echo "gnome-session" > /home/${USERNAME}/.xsession
+      chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.xsession
+
+      # Configure SELinux for XRDP
+      setsebool -P xrdp_connect_all_ports 1 || true
+
+      echo "=== Setup Complete ==="
+
+runcmd:
+  - systemctl set-default graphical.target
+  - /opt/setup-desktop.sh
+  - reboot
+
+final_message: "${DISTRO_NAME} Desktop VM is ready! Connect via RDP or console."
+EOF
+}
+
+create_cloud_init_config() {
+    log_info "Creating cloud-init configuration..."
+
+    local PASSWORD_HASH
+    PASSWORD_HASH=$(generate_password_hash)
+
+    # Create distro-specific user-data
+    case "${DISTRO}" in
+        ubuntu)
+            create_cloud_init_config_ubuntu "${PASSWORD_HASH}"
+            ;;
+        fedora)
+            create_cloud_init_config_fedora "${PASSWORD_HASH}"
+            ;;
+    esac
 
     # Create meta-data
     cat > "${WORK_DIR}/meta-data" << EOF
@@ -452,7 +639,7 @@ create_vm() {
         --vcpus "${VCPUS}" \
         --disk path="${VM_DISK}",format=qcow2 \
         --disk path="${CLOUD_INIT_ISO}",device=cdrom \
-        --os-variant ubuntu24.04 \
+        --os-variant "${DISTRO_OS_VARIANT}" \
         --network "${network_opt}" \
         --graphics spice \
         --video qxl \
@@ -491,6 +678,7 @@ ${GREEN}============================================${NC}
 ${GREEN}   VM Installation Complete!${NC}
 ${GREEN}============================================${NC}
 
+Distro:         ${DISTRO_NAME} ${DISTRO_VERSION}
 VM Name:        ${VM_NAME}
 Hostname:       ${HOSTNAME}
 Username:       ${USERNAME}
@@ -554,7 +742,7 @@ prompt_console_connect() {
 
 # Main execution
 main() {
-    log_info "Starting Ubuntu Cloud Image Desktop VM Installer v${VERSION}"
+    log_info "Starting Cloud Image Desktop VM Installer v${VERSION}"
 
     # Handle remove mode
     if [[ "${REMOVE_VM}" == true ]]; then
@@ -563,6 +751,7 @@ main() {
     fi
 
     log_info "VM Configuration:"
+    log_info "  Distro: ${DISTRO_NAME} ${DISTRO_VERSION}"
     log_info "  Hostname: ${HOSTNAME}"
     log_info "  Username: ${USERNAME}"
     log_info "  Full Name: ${FULLNAME}"

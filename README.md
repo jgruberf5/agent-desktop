@@ -1,10 +1,12 @@
-# Ubuntu Cloud Image Desktop VM Installer
+# Cloud Image Desktop VM Installer
 
-A bash script to quickly deploy Ubuntu Desktop virtual machines on KVM/libvirt hosts using cloud images and cloud-init.
+A bash script to quickly deploy Ubuntu or Fedora Desktop virtual machines on KVM/libvirt hosts using cloud images and cloud-init.
 
 ## Features
 
-- Deploys Ubuntu 24.04 (Noble) Desktop VMs from official cloud images
+- Supports multiple Linux distributions:
+  - Ubuntu 24.04 LTS (Noble Numbat)
+  - Fedora 41
 - Cloud-init based configuration for reproducible deployments
 - XRDP enabled for remote desktop access
 - SPICE graphics for local console access
@@ -36,10 +38,13 @@ A bash script to quickly deploy Ubuntu Desktop virtual machines on KVM/libvirt h
 Run directly from the latest release:
 
 ```bash
+# Ubuntu (default)
 curl -fsSL https://github.com/OWNER/REPO/releases/latest/download/install.sh | sudo bash -s -- \
-  --hostname mydesktop \
-  --username myuser \
-  --fullname "John Doe" \
+  --password mypassword
+
+# Fedora
+curl -fsSL https://github.com/OWNER/REPO/releases/latest/download/install.sh | sudo bash -s -- \
+  --distro fedora \
   --password mypassword
 ```
 
@@ -57,6 +62,7 @@ sudo ./install.sh --help
 git clone https://github.com/OWNER/REPO.git
 cd REPO
 sudo ./install.sh \
+  --distro ubuntu \
   --hostname mydesktop \
   --username myuser \
   --fullname "John Doe" \
@@ -66,20 +72,21 @@ sudo ./install.sh \
 ## Usage
 
 ```
-Ubuntu Cloud Image Desktop VM Installer for KVM v1.0.0
+Cloud Image Desktop VM Installer for KVM v1.1.0
 
 Usage: ./install.sh [OPTIONS]
 
 Options:
-    -h, --hostname      VM hostname (default: ubuntu-desktop)
+    -o, --distro        Linux distribution: ubuntu, fedora (default: ubuntu)
+    -h, --hostname      VM hostname (default: <distro>-desktop)
     -u, --username      Username for the VM (default: user)
-    -f, --fullname      Full name of the user (default: Ubuntu User)
+    -f, --fullname      Full name of the user (default: <Distro> User)
     -p, --password      User password (required for install)
     -c, --vcpus         Number of vCPUs (default: 4)
     -r, --ram           RAM size in MB (default: 8192)
     -d, --disk          Disk size in GB (default: 50)
-    -n, --name          Virtual machine name (default: ubuntu-desktop-vm)
-    -e, --desktop       Desktop environment package (default: ubuntu-desktop-minimal)
+    -n, --name          Virtual machine name (default: <distro>-desktop-vm)
+    -e, --desktop       Desktop environment package (default: distro-specific)
     -b, --bridge        Host bridge for VM network (e.g., br0)
     -D, --hostdev       Host device passthrough (repeatable)
     -s, --silent        Silent install (no output, no prompts)
@@ -88,18 +95,32 @@ Options:
     --version           Show version
 ```
 
+## Supported Distributions
+
+| Distribution | Version | Default Desktop |
+|--------------|---------|-----------------|
+| Ubuntu | 24.04 LTS (Noble) | `ubuntu-desktop-minimal` (GNOME) |
+| Fedora | 41 | `@workstation-product-environment` (GNOME) |
+
 ## Examples
 
-### Basic Installation
+### Basic Ubuntu Installation
 
 ```bash
 sudo ./install.sh -p mypassword
+```
+
+### Basic Fedora Installation
+
+```bash
+sudo ./install.sh --distro fedora -p mypassword
 ```
 
 ### Full Custom Configuration
 
 ```bash
 sudo ./install.sh \
+  --distro ubuntu \
   --hostname dev-workstation \
   --username developer \
   --fullname "Jane Developer" \
@@ -107,14 +128,13 @@ sudo ./install.sh \
   --vcpus 8 \
   --ram 16384 \
   --disk 200 \
-  --name dev-vm \
-  --desktop ubuntu-desktop
+  --name dev-vm
 ```
 
 ### Using Short Options
 
 ```bash
-sudo ./install.sh -h devbox -u dev -f "Dev User" -p pass123 -c 4 -r 8192 -d 100 -n my-vm
+sudo ./install.sh -o fedora -h devbox -u dev -f "Dev User" -p pass123 -c 4 -r 8192 -d 100 -n my-vm
 ```
 
 ### Using a Host Bridge
@@ -123,6 +143,7 @@ Connect the VM directly to your network using a host bridge:
 
 ```bash
 sudo ./install.sh \
+  --distro ubuntu \
   --hostname bridged-vm \
   --username myuser \
   --password mypassword \
@@ -147,16 +168,12 @@ virsh nodedev-list
 
 # Pass through a GPU (and its audio device)
 sudo ./install.sh \
+  --distro ubuntu \
   --hostname gpu-vm \
   --username myuser \
   --password mypassword \
   --hostdev pci_0000_01_00_0 \
   --hostdev pci_0000_01_00_1
-
-# Pass through a USB device
-sudo ./install.sh \
-  --password mypassword \
-  --hostdev usb_1d6b_0002
 ```
 
 ### Silent Installation
@@ -166,6 +183,7 @@ Run without output or prompts (useful for automation):
 ```bash
 sudo ./install.sh \
   --silent \
+  --distro fedora \
   --hostname auto-vm \
   --username myuser \
   --password mypassword \
@@ -174,12 +192,12 @@ sudo ./install.sh \
 
 ## Desktop Environments
 
-You can install different Ubuntu desktop flavors using the `--desktop` option:
+### Ubuntu Desktop Options
 
 | Package | Desktop Environment |
 |---------|---------------------|
-| `ubuntu-desktop` | GNOME (default) |
-| `ubuntu-desktop-minimal` | GNOME (minimal) |
+| `ubuntu-desktop-minimal` | GNOME (minimal, default) |
+| `ubuntu-desktop` | GNOME (full) |
 | `kubuntu-desktop` | KDE Plasma |
 | `xubuntu-desktop` | XFCE |
 | `lubuntu-desktop` | LXQt |
@@ -187,14 +205,26 @@ You can install different Ubuntu desktop flavors using the `--desktop` option:
 | `ubuntu-budgie-desktop` | Budgie |
 | `ubuntucinnamon-desktop` | Cinnamon |
 
-### Example: KDE Plasma Desktop
+### Fedora Desktop Options
+
+| Package | Desktop Environment |
+|---------|---------------------|
+| `@workstation-product-environment` | GNOME (default) |
+| `@kde-desktop-environment` | KDE Plasma |
+| `@xfce-desktop-environment` | XFCE |
+| `@lxqt-desktop-environment` | LXQt |
+| `@mate-desktop-environment` | MATE |
+| `@cinnamon-desktop-environment` | Cinnamon |
+
+### Example: KDE Plasma on Fedora
 
 ```bash
 sudo ./install.sh \
+  --distro fedora \
   --hostname kde-desktop \
   --username myuser \
   --password mypassword \
-  --desktop kubuntu-desktop
+  --desktop "@kde-desktop-environment"
 ```
 
 ## Connecting to the VM
@@ -253,10 +283,11 @@ virsh reboot <vm-name>
 ### Delete VM
 
 ```bash
-# Stop if running
-virsh destroy <vm-name>
+# Using the script
+sudo ./install.sh --remove --name <vm-name>
 
-# Remove VM and storage
+# Or manually
+virsh destroy <vm-name>
 virsh undefine <vm-name> --remove-all-storage
 ```
 
@@ -331,8 +362,14 @@ systemctl status xrdp
 Check firewall rules:
 
 ```bash
+# Ubuntu
 sudo ufw status
 sudo ufw allow 3389/tcp
+
+# Fedora
+sudo firewall-cmd --list-all
+sudo firewall-cmd --add-port=3389/tcp --permanent
+sudo firewall-cmd --reload
 ```
 
 ### Desktop Not Loading via RDP
@@ -344,6 +381,14 @@ cat ~/.xsession
 # Should contain: gnome-session (or appropriate session command)
 ```
 
+### Fedora SELinux Issues
+
+If XRDP has issues on Fedora, check SELinux:
+
+```bash
+sudo setsebool -P xrdp_connect_all_ports 1
+```
+
 ## Development
 
 ### Creating a Release
@@ -351,8 +396,8 @@ cat ~/.xsession
 Releases are automatically created when a new tag is pushed:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 The GitHub Actions workflow will:
