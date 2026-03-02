@@ -17,6 +17,7 @@ DEFAULT_RAM="8192"
 DEFAULT_DISK="50"
 DEFAULT_VM_NAME="ubuntu-desktop-vm"
 DEFAULT_DESKTOP="ubuntu-desktop"
+DEFAULT_BRIDGE=""
 
 # Color output
 RED='\033[0;31m'
@@ -46,17 +47,22 @@ Options:
     -h, --hostname      VM hostname (default: ${DEFAULT_HOSTNAME})
     -u, --username      Username for the VM (default: ${DEFAULT_USERNAME})
     -f, --fullname      Full name of the user (default: ${DEFAULT_FULLNAME})
-    -p, --password      User password (required)
+    -p, --password      User password (required for install)
     -c, --vcpus         Number of vCPUs (default: ${DEFAULT_VCPUS})
     -r, --ram           RAM size in MB (default: ${DEFAULT_RAM})
     -d, --disk          Disk size in GB (default: ${DEFAULT_DISK})
     -n, --name          Virtual machine name (default: ${DEFAULT_VM_NAME})
     -e, --desktop       Desktop environment package (default: ${DEFAULT_DESKTOP})
+    -b, --bridge        Host bridge for VM network (e.g., br0). If not specified,
+                        uses the default libvirt NAT network.
+    --remove            Remove the VM and all associated storage
     --help              Show this help message
     --version           Show version
 
-Example:
+Examples:
     $0 -h mydesktop -u myuser -f "John Doe" -p mypassword -c 4 -r 8192 -d 100 -n my-vm
+    $0 -n my-vm -p mypassword --bridge br0
+    $0 --remove -n my-vm
 
 The script will install the following software automatically:
     - Google Chrome
@@ -85,6 +91,8 @@ RAM="${DEFAULT_RAM}"
 DISK="${DEFAULT_DISK}"
 VM_NAME="${DEFAULT_VM_NAME}"
 DESKTOP="${DEFAULT_DESKTOP}"
+BRIDGE="${DEFAULT_BRIDGE}"
+REMOVE_VM=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -124,6 +132,14 @@ while [[ $# -gt 0 ]]; do
             DESKTOP="$2"
             shift 2
             ;;
+        -b|--bridge)
+            BRIDGE="$2"
+            shift 2
+            ;;
+        --remove)
+            REMOVE_VM=true
+            shift
+            ;;
         --help)
             usage
             ;;
@@ -138,7 +154,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "${PASSWORD}" ]]; then
+if [[ "${REMOVE_VM}" == false ]] && [[ -z "${PASSWORD}" ]]; then
     log_error "Password is required. Use -p or --password to specify."
     exit 1
 fi
@@ -174,6 +190,38 @@ check_dependencies() {
         systemctl start libvirtd
         systemctl enable libvirtd
     fi
+}
+
+# Remove VM and associated storage
+remove_vm() {
+    local vm_name="$1"
+    local work_dir="/var/lib/libvirt/images/${vm_name}"
+
+    log_info "Removing virtual machine: ${vm_name}"
+
+    # Check if VM exists
+    if ! virsh dominfo "${vm_name}" &> /dev/null; then
+        log_warn "VM '${vm_name}' does not exist in libvirt"
+    else
+        # Stop VM if running
+        if virsh domstate "${vm_name}" 2>/dev/null | grep -q "running"; then
+            log_info "Stopping VM '${vm_name}'..."
+            virsh destroy "${vm_name}" 2>/dev/null || true
+        fi
+
+        # Undefine VM and remove managed storage
+        log_info "Undefining VM '${vm_name}' and removing storage..."
+        virsh undefine "${vm_name}" --remove-all-storage 2>/dev/null || \
+            virsh undefine "${vm_name}" 2>/dev/null || true
+    fi
+
+    # Remove working directory if it exists
+    if [[ -d "${work_dir}" ]]; then
+        log_info "Removing working directory: ${work_dir}"
+        rm -rf "${work_dir}"
+    fi
+
+    log_info "VM '${vm_name}' has been completely removed"
 }
 
 # Set up working directory
@@ -350,6 +398,16 @@ create_vm() {
         virsh undefine "${VM_NAME}" --remove-all-storage 2>/dev/null || true
     fi
 
+    # Determine network configuration
+    local network_opt
+    if [[ -n "${BRIDGE}" ]]; then
+        network_opt="bridge=${BRIDGE},model=virtio"
+        log_info "Using bridge network: ${BRIDGE}"
+    else
+        network_opt="network=default,model=virtio"
+        log_info "Using default NAT network"
+    fi
+
     virt-install \
         --name "${VM_NAME}" \
         --ram "${RAM}" \
@@ -357,7 +415,7 @@ create_vm() {
         --disk path="${VM_DISK}",format=qcow2 \
         --disk path="${CLOUD_INIT_ISO}",device=cdrom \
         --os-variant ubuntu24.04 \
-        --network network=default,model=virtio \
+        --network "${network_opt}" \
         --graphics spice \
         --video qxl \
         --channel spicevmc \
@@ -400,6 +458,7 @@ vCPUs:          ${VCPUS}
 RAM:            ${RAM} MB
 Disk:           ${DISK} GB
 Desktop:        ${DESKTOP}
+Network:        ${BRIDGE:-default (NAT)}
 EOF
 
     if [[ -n "${vm_ip}" ]]; then
@@ -439,6 +498,13 @@ EOF
 # Main execution
 main() {
     log_info "Starting Ubuntu Cloud Image Desktop VM Installer v${VERSION}"
+
+    # Handle remove mode
+    if [[ "${REMOVE_VM}" == true ]]; then
+        remove_vm "${VM_NAME}"
+        exit 0
+    fi
+
     log_info "VM Configuration:"
     log_info "  Hostname: ${HOSTNAME}"
     log_info "  Username: ${USERNAME}"
@@ -448,6 +514,7 @@ main() {
     log_info "  Disk: ${DISK} GB"
     log_info "  VM Name: ${VM_NAME}"
     log_info "  Desktop: ${DESKTOP}"
+    log_info "  Network: ${BRIDGE:-default (NAT)}"
 
     check_dependencies
     setup_working_directory

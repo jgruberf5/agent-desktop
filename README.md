@@ -74,12 +74,14 @@ Options:
     -h, --hostname      VM hostname (default: ubuntu-desktop)
     -u, --username      Username for the VM (default: user)
     -f, --fullname      Full name of the user (default: Ubuntu User)
-    -p, --password      User password (required)
+    -p, --password      User password (required for install)
     -c, --vcpus         Number of vCPUs (default: 4)
     -r, --ram           RAM size in MB (default: 8192)
     -d, --disk          Disk size in GB (default: 50)
     -n, --name          Virtual machine name (default: ubuntu-desktop-vm)
     -e, --desktop       Desktop environment package (default: ubuntu-desktop)
+    -b, --bridge        Host bridge for VM network (e.g., br0)
+    --remove            Remove the VM and all associated storage
     --help              Show this help message
     --version           Show version
 ```
@@ -111,6 +113,26 @@ sudo ./install.sh \
 
 ```bash
 sudo ./install.sh -h devbox -u dev -f "Dev User" -p pass123 -c 4 -r 8192 -d 100 -n my-vm
+```
+
+### Using a Host Bridge
+
+Connect the VM directly to your network using a host bridge:
+
+```bash
+sudo ./install.sh \
+  --hostname bridged-vm \
+  --username myuser \
+  --password mypassword \
+  --bridge br0
+```
+
+### Removing a VM
+
+Completely remove a VM and all associated storage:
+
+```bash
+sudo ./install.sh --remove --name my-vm
 ```
 
 ## Desktop Environments
