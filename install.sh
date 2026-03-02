@@ -26,15 +26,17 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 log_info() {
+    [[ "${SILENT:-false}" == true ]] && return
     echo -e "${GREEN}[INFO]${NC} $1"
 }
 
 log_warn() {
+    [[ "${SILENT:-false}" == true ]] && return
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
 usage() {
@@ -55,6 +57,7 @@ Options:
     -e, --desktop       Desktop environment package (default: ${DEFAULT_DESKTOP})
     -b, --bridge        Host bridge for VM network (e.g., br0). If not specified,
                         uses the default libvirt NAT network.
+    -s, --silent        Silent install (no output, no prompts)
     --remove            Remove the VM and all associated storage
     --help              Show this help message
     --version           Show version
@@ -92,6 +95,7 @@ DISK="${DEFAULT_DISK}"
 VM_NAME="${DEFAULT_VM_NAME}"
 DESKTOP="${DEFAULT_DESKTOP}"
 BRIDGE="${DEFAULT_BRIDGE}"
+SILENT=false
 REMOVE_VM=false
 
 while [[ $# -gt 0 ]]; do
@@ -135,6 +139,10 @@ while [[ $# -gt 0 ]]; do
         -b|--bridge)
             BRIDGE="$2"
             shift 2
+            ;;
+        -s|--silent)
+            SILENT=true
+            shift
             ;;
         --remove)
             REMOVE_VM=true
@@ -241,14 +249,22 @@ download_cloud_image() {
         log_info "Cloud image already exists, skipping download"
     else
         log_info "Downloading Ubuntu ${UBUNTU_VERSION} cloud image..."
-        wget -q --show-progress -O "${CLOUD_IMAGE}" "${CLOUD_IMAGE_URL}"
+        if [[ "${SILENT}" == true ]]; then
+            wget -q -O "${CLOUD_IMAGE}" "${CLOUD_IMAGE_URL}"
+        else
+            wget -q --show-progress -O "${CLOUD_IMAGE}" "${CLOUD_IMAGE_URL}"
+        fi
     fi
 }
 
 create_vm_disk() {
     log_info "Creating VM disk (${DISK}GB)..."
     cp "${CLOUD_IMAGE}" "${VM_DISK}"
-    qemu-img resize "${VM_DISK}" "${DISK}G"
+    if [[ "${SILENT}" == true ]]; then
+        qemu-img resize "${VM_DISK}" "${DISK}G" >/dev/null 2>&1
+    else
+        qemu-img resize "${VM_DISK}" "${DISK}G"
+    fi
 }
 
 # Generate hashed password
@@ -382,10 +398,17 @@ EOF
 
     # Generate cloud-init ISO
     log_info "Generating cloud-init ISO..."
-    cloud-localds -v --network-config="${WORK_DIR}/network-config" \
-        "${CLOUD_INIT_ISO}" \
-        "${WORK_DIR}/user-data" \
-        "${WORK_DIR}/meta-data"
+    if [[ "${SILENT}" == true ]]; then
+        cloud-localds --network-config="${WORK_DIR}/network-config" \
+            "${CLOUD_INIT_ISO}" \
+            "${WORK_DIR}/user-data" \
+            "${WORK_DIR}/meta-data" 2>/dev/null
+    else
+        cloud-localds -v --network-config="${WORK_DIR}/network-config" \
+            "${CLOUD_INIT_ISO}" \
+            "${WORK_DIR}/user-data" \
+            "${WORK_DIR}/meta-data"
+    fi
 }
 
 create_vm() {
@@ -427,6 +450,8 @@ create_vm() {
 }
 
 print_summary() {
+    [[ "${SILENT}" == true ]] && return
+
     # Get VM IP (may take a moment to appear)
     log_info "Waiting for VM to get an IP address..."
     local attempts=0
@@ -496,6 +521,8 @@ EOF
 }
 
 prompt_console_connect() {
+    [[ "${SILENT}" == true ]] && return
+
     echo ""
     read -r -p "Would you like to connect to the VM console now? [y/N] " response
     case "${response}" in
