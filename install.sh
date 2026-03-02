@@ -26,12 +26,16 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 log_info() {
-    [[ "${SILENT:-false}" == true ]] && return
+    if [[ "${SILENT:-false}" == true ]]; then
+        return
+    fi
     echo -e "${GREEN}[INFO]${NC} $1"
 }
 
 log_warn() {
-    [[ "${SILENT:-false}" == true ]] && return
+    if [[ "${SILENT:-false}" == true ]]; then
+        return
+    fi
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
@@ -661,7 +665,9 @@ create_vm() {
 }
 
 print_summary() {
-    [[ "${SILENT}" == true ]] && return
+    if [[ "${SILENT}" == true ]]; then
+        return
+    fi
 
     # Get VM IP (may take a moment to appear)
     log_info "Waiting for VM to get an IP address..."
@@ -733,7 +739,9 @@ EOF
 }
 
 prompt_console_connect() {
-    [[ "${SILENT}" == true ]] && return
+    if [[ "${SILENT}" == true ]]; then
+        return
+    fi
 
     echo ""
     read -r -p "Would you like to connect to the VM console now? [y/N] " response
