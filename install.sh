@@ -363,7 +363,7 @@ create_vm() {
         --channel spicevmc \
         --console pty,target_type=serial \
         --noautoconsole \
-        --boot hd
+        --import
 
     log_info "VM '${VM_NAME}' created and starting..."
 }
